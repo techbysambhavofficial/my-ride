@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>GoMove | GPS Transport Service - Complete Prototype</title>
+    <!-- Google Fonts & Font Awesome 6 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Leaflet.js for real GPS map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet routing machine for route preview -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #111827;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        /* Premium App Container */
+        .app-wrapper {
+            max-width: 420px;
+            width: 100%;
+            height: 780px;
+            background: #ffffff;
+            border-radius: 48px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.3), 0 0 0 8px #eef2ff;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .app-screen {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+            background: #f8fafd;
+        }
+
+        .app-screen::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        /* Page containers */
+        .page {
+            display: none;
+            animation: pageEnter 0.35s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+        }
+
+        .page.active-page {
+            display: block;
+        }
+
+        @keyframes pageEnter {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* UI Components */
+        .status-bar {
+            padding: 12px 20px 6px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            background: inherit;
+            color: #1e293b;
+        }
+
+        .header {
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #eef2f8;
+        }
+
+        .logo {
+            font-size: 26px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #0b2b40, #166534);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .btn-icon, .back-btn {
+            background: #f1f5f9;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 30px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #1f3a5f;
+        }
+
+        .card {
+            background: white;
+            margin: 16px 18px;
+            padding: 20px;
+            border-radius: 32px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+            border: 1px solid #eef2ff;
+        }
+
+        .btn-primary {
+            background: #0f2b3d;
+            color: white;
+            border: none;
+            padding: 16px;
+            font-weight: 700;
+            border-radius: 60px;
+            width: 100%;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:active { transform: scale(0.97); background: #1e4a6e; }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .input-group label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #4b5565;
+            margin-bottom: 6px;
+            display: block;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: 30px;
+            border: 1.5px solid #e2e8f0;
+            background: #ffffff;
+            font-size: 15px;
+        }
+
+        .location-pill {
+            background: #f1f5f9;
+            padding: 14px 16px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        /* Ride Type Selector */
+        .ride-types {
+            display: flex;
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .ride-option-card {
+            flex: 1;
+            background: #f9f9ff;
+            border-radius: 28px;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #eef2ff;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .ride-option-card.active-ride {
+            background: #eef4ff;
+            border-color: #0f2b3d;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .price-detail {
+            font-size: 28px;
+            font-weight: 800;
+            color: #0b2b40;
+        }
+
+        .map-container {
+            height: 240px;
+            border-radius: 28px;
+            overflow: hidden;
+            margin: 8px 18px;
+            border: 1px solid #e2edff;
+        }
+        #routingMap {
+            height: 100%;
+            width: 100%;
+        }
+
+        .bottom-nav {
+            background: rgba(255,255,255,0.96);
+            backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 20px 18px;
+            border-top: 1px solid #ecf3fa;
+        }
+        .nav-btn {
+            text-align: center;
+            font-size: 12px;
+            color: #8e9aaf;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .nav-btn i { font-size: 24px; display: block; margin-bottom: 4px; }
+        .nav-btn.active-nav { color: #0f2b3d; font-weight: 700; }
+
+        .trip-history-item {
+            background: #fafcff;
+            border-radius: 24px;
+            padding: 14px;
+            margin-bottom: 12px;
+            border-left: 4px solid #2b6e4f;
+        }
+        .promo-badge {
+            background: #fef9e3;
+            border-radius: 20px;
+            padding: 10px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+<div class="app-wrapper">
+    <div class="app-screen" id="appScreenContainer">
+        <!-- AUTH PAGE (Login / Signup) -->
+        <div id="authPage" class="page active-page">
+            <div class="status-bar"><span>9:41</span><span><i class="fas fa-bluetooth"></i> <i class="fas fa-battery-full"></i></span></div>
+            <div class="header" style="border-bottom: none;"><div class="logo">GoMove</div><div></div></div>
+            <div class="card" style="margin-top: 30px;">
+                <h2 style="margin-bottom: 8px;">Get moving 🚀</h2>
+                <p style="color:#4b5565; margin-bottom: 24px;">Sign in to book your ride</p>
+                <div class="input-group"><label>Mobile / Email</label><input type="text" id="authEmail" placeholder="+91 98765 43210" value="rider@example.com"></div>
+                <div class="input-group"><label>Password</label><input type="password" id="authPass" placeholder="******" value="demo123"></div>
+                <button class="btn-primary" id="doLoginBtn"><i class="fas fa-fingerprint"></i> Login / Sign Up</button>
+                <p style="text-align: center; margin-top: 20px; font-size: 12px;">Demo: any credentials works</p>
+            </div>
+        </div>
+
+        <!-- HOME PAGE (Main Dashboard + Map + Booking) -->
+        <div id="homePage" class="page">
+            <div class="status-bar"><span><i class="fas fa-location-dot" style="color:#0f2b3d;"></i> GPS Live</span><span><i class="fas fa-wifi"></i></span></div>
+            <div class="header"><div class="logo">GoMove</div><button class="btn-icon" id="logoutFromHome"><i class="fas fa-sign-out-alt"></i></button></div>
+            
+            <!-- Interactive GPS MAP with Routing -->
+            <div class="map-container" id="mapHolder"><div id="routingMap" style="height: 100%;"></div></div>
+            
+            <!-- Booking Widget -->
+            <div class="card">
+                <div class="location-pill"><i class="fas fa-circle-dot" style="color:#0f2b3d;"></i><span id="pickupLabel">Current Location (GPS)</span><i class="fas fa-chevron-down" style="margin-left: auto;"></i></div>
+                <div class="input-group"><label><i class="fas fa-map-pin"></i> Where to?</label><input type="text" id="destinationField" placeholder="Enter destination" value="India Gate, New Delhi"></div>
+                
+                <!-- Ride Type Selector (Uber like) -->
+                <div class="ride-types" id="rideTypeSelector">
+                    <div class="ride-option-card" data-ride="GoMini"><i class="fas fa-car-side"></i> Mini<br><small>₹8/km</small></div>
+                    <div class="ride-option-card active-ride" data-ride="GoSedan"><i class="fas fa-car"></i> Sedan<br><small>₹12/km</small></div>
+                    <div class="ride-option-card" data-ride="GoSUV"><i class="fas fa-truck-pickup"></i> SUV<br><small>₹18/km</small></div>
+                </div>
+                
+                <div class="flex-between" style="display: flex; justify-content: space-between; align-items: baseline; margin: 12px 0 8px;">
+                    <span><i class="fas fa-tag"></i> FARE ESTIMATE</span>
+                    <span class="price-detail" id="dynamicFare">₹0</span>
+                </div>
+                <div class="promo-badge"><i class="fas fa-gift"></i> Apply promo: <strong>FIRSTRIDE15</strong> (15% off)</div>
+                <button class="btn-primary" id="bookRideBtn" style="margin-top: 18px;"><i class="fas fa-check-circle"></i> REQUEST GoMove</button>
+            </div>
+            
+            <!-- Active Ride Tracking Card -->
+            <div id="activeRideCard" style="display: none; background: #eef2ff; margin: 0 18px 16px; border-radius: 28px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between;"><span><i class="fas fa-taxi fa-beat-fade"></i> <strong>Ride Confirmed</strong></span><span id="driverETA">Arriving in 3 min</span></div>
+                <div style="margin-top: 12px; background: white; border-radius: 20px; padding: 12px;">
+                    <div><i class="fas fa-user-check"></i> Driver: Vikram (⭐4.92) · KL-01 AB 1234</div>
+                    <div><i class="fas fa-route"></i> From: Your location</div>
+                    <div><i class="fas fa-flag-checkered"></i> To: <span id="activeDest"></span></div>
+                    <div><i class="fas fa-charging-station"></i> OTP: <strong id="rideOtp">2846</strong></div>
+                </div>
+                <button id="cancelActiveRideBtn" style="width:100%; margin-top:12px; background:transparent; border:1px solid #cbd5e6; border-radius:40px; padding:10px;">Cancel Ride</button>
+            </div>
+            
+            <!-- bottom navbar -->
+            <div class="bottom-nav">
+                <div class="nav-btn active-nav" data-navpage="home"><i class="fas fa-home"></i><span>Home</span></div>
+                <div class="nav-btn" data-navpage="trips"><i class="fas fa-clock-rotate-left"></i><span>Trips</span></div>
+                <div class="nav-btn" data-navpage="wallet"><i class="fas fa-wallet"></i><span>Wallet</span></div>
+                <div class="nav-btn" data-navpage="account"><i class="fas fa-user-circle"></i><span>Profile</span></div>
+            </div>
+        </div>
+
+        <!-- TRIPS HISTORY PAGE -->
+        <div id="tripsPage" class="page">
+            <div class="status-bar">History</div>
+            <div class="header"><button class="back-btn" id="backHomeFromTrips"><i class="fas fa-arrow-left"></i></button><span style="font-weight: 700;">Ride History</span><div></div></div>
+            <div id="historyList" class="card" style="min-height: 400px;"><p style="text-align:center; color:gray;">No rides completed yet</p></div>
+        </div>
+
+        <!-- WALLET & PAYMENTS PAGE -->
+        <div id="walletPage" class="page">
+            <div class="status-bar">Wallet</div>
+            <div class="header"><button class="back-btn" id="backHomeFromWallet"><i class="fas fa-arrow-left"></i></button><span style="font-weight: 700;">Payment Hub</span><div></div></div>
+            <div class="card" style="text-align:center;"><h2>💰 Wallet Balance</h2><div style="font-size: 48px; font-weight:800;" id="walletBalance">₹520</div><button id="addMoneyBtn" class="btn-primary" style="margin-top:12px; background:#2b6e4f;"><i class="fas fa-plus-circle"></i> Add ₹200</button></div>
+            <div class="card"><i class="fas fa-credit-card"></i> <strong>Payment Methods</strong><hr style="margin:10px 0"><div><i class="fab fa-google-pay"></i> Google Pay <span style="float:right;">Linked</span></div><div><i class="fas fa-money-bill"></i> Cash <span style="float:right;">Available</span></div></div>
+        </div>
+
+        <!-- PROFILE PAGE -->
+        <div id="accountPage" class="page">
+            <div class="status-bar">Profile</div>
+            <div class="header"><button class="back-btn" id="backHomeFromAccount"><i class="fas fa-arrow-left"></i></button><span style="font-weight: 700;">My Account</span><div></div></div>
+            <div class="card" style="text-align:center;"><i class="fas fa-user-circle" style="font-size: 70px; color:#2c5f8a;"></i><h3 id="profileUserName">Rider One</h3><p><i class="fas fa-star" style="color:gold;"></i> Rating: 4.92 · 28 trips</p><button id="logoutProfileBtn" class="btn-primary" style="background:#b91c1c; margin-top:12px;">Logout</button></div>
+            <div class="card"><i class="fas fa-headset"></i> 24/7 Support & Safety</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- APP STATE (Deep simulation) ----------
+    let currentUser = { name: "Rider", email: "rider@example.com", wallet: 520 };
+    let rideHistory = []; // stores completed rides
+    let activeRide = null;
+    let selectedRideType = "GoSedan"; // Mini, Sedan, SUV
+    let currentCoords = { lat: 28.6129, lng: 77.2295 }; // Connaught place
+    let destinationCoords = { lat: 28.6093, lng: 77.2317 }; // India Gate approx
+    let mapObject = null;
+    let routingControl = null;
+    let routeDistanceKm = 2.4; // initial approx
+
+    // DOM elements
+    const homePage = document.getElementById('homePage');
+    const authPage = document.getElementById('authPage');
+    const tripsPage = document.getElementById('tripsPage');
+    const walletPage = document.getElementById('walletPage');
+    const accountPage = document.getElementById('accountPage');
+    const pages = [authPage, homePage, tripsPage, walletPage, accountPage];
+
+    function showPage(pageId) {
+        pages.forEach(p => p.classList.remove('active-page'));
+        document.getElementById(pageId).classList.add('active-page');
+        if(pageId === 'homePage' && mapObject) { setTimeout(() => mapObject.invalidateSize(), 100); updateRoutePreview(); }
+    }
+
+    // Fare calculation based on distance and ride type
+    function calcFare(distanceKm, type) {
+        let perKm = type === 'GoMini' ? 8 : (type === 'GoSedan' ? 12 : 18);
+        let base = 35;
+        let fare = base + (distanceKm * perKm);
+        return Math.max(55, Math.floor(fare));
+    }
+
+    async function updateRoutePreview() {
+        if(!mapObject || !currentCoords || !destinationCoords) return;
+        if(routingControl) mapObject.removeControl(routingControl);
+        routingControl = L.Routing.control({
+            waypoints: [L.latLng(currentCoords.lat, currentCoords.lng), L.latLng(destinationCoords.lat, destinationCoords.lng)],
+            routeWhileDragging: false,
+            showAlternatives: false,
+            lineOptions: { styles: [{ color: '#0f2b3d', weight: 5 }] }
+        }).addTo(mapObject);
+        routingControl.on('routesfound', function(e) {
+            let route = e.routes[0];
+            let distanceMeters = route.summary.totalDistance;
+            let distanceKm = distanceMeters / 1000;
+            routeDistanceKm = distanceKm;
+            let fare = calcFare(distanceKm, selectedRideType);
+            document.getElementById('dynamicFare').innerHTML = `₹${fare}`;
+        });
+        // fallback dummy after 1 sec if route fails (demo)
+        setTimeout(() => {
+            if(document.getElementById('dynamicFare').innerHTML === "₹0") {
+                let dummyDist = 2.8 + Math.random()*1.5;
+                routeDistanceKm = dummyDist;
+                document.getElementById('dynamicFare').innerHTML = `₹${calcFare(dummyDist, selectedRideType)}`;
+            }
+        }, 800);
+    }
+
+    function initMapSystem() {
+        if(mapObject) return;
+        mapObject = L.map('routingMap').setView([currentCoords.lat, currentCoords.lng], 14);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap' }).addTo(mapObject);
+        L.marker([currentCoords.lat, currentCoords.lng], { icon: L.divIcon({html:'<i class="fas fa-map-marker-alt" style="font-size:24px;color:#0f2b3d;"></i>', iconSize:[24,24]}) }).addTo(mapObject).bindPopup('Your Location');
+        updateRoutePreview();
+        // simulate changing destination when user types new place (basic geocoding mock)
+        const destField = document.getElementById('destinationField');
+        destField.addEventListener('change', () => {
+            let destText = destField.value.toLowerCase();
+            if(destText.includes('gate')) { destinationCoords = { lat: 28.6093, lng: 77.2317 }; }
+            else if(destText.includes('airport')) destinationCoords = { lat: 28.5562, lng: 77.1000 };
+            else if(destText.includes('station')) destinationCoords = { lat: 28.6614, lng: 77.2279 };
+            else destinationCoords = { lat: currentCoords.lat + 0.025, lng: currentCoords.lng + 0.02 };
+            updateRoutePreview();
+        });
+    }
+
+    function updateWalletDisplay() { document.getElementById('walletBalance').innerText = `₹${currentUser.wallet}`; }
+    function updateHistoryUI() {
+        const historyDiv = document.getElementById('historyList');
+        if(rideHistory.length === 0) { historyDiv.innerHTML = '<p style="text-align:center; color:gray;">✨ Your ride history will appear here</p>'; return; }
+        let html = '';
+        rideHistory.forEach(ride => {
+            html += `<div class="trip-history-item"><div><i class="fas fa-calendar-day"></i> ${ride.date}</div><div><strong>${ride.from} → ${ride.to}</strong></div><div>${ride.type} · ₹${ride.fare} · ${ride.status}</div></div>`;
+        });
+        historyDiv.innerHTML = html;
+    }
+
+    function requestRide() {
+        if(activeRide) { alert("You already have an active ride!"); return; }
+        let destValue = document.getElementById('destinationField').value;
+        if(!destValue.trim()) { alert("Please enter destination"); return; }
+        let fare = parseInt(document.getElementById('dynamicFare').innerText.replace('₹',''));
+        if(isNaN(fare)) fare = 125;
+        // OTP simulation
+        let otp = Math.floor(1000 + Math.random() * 9000);
+        activeRide = {
+            id: Date.now(),
+            destination: destValue,
+            fare: fare,
+            type: selectedRideType,
+            status: 'accepted',
+            driverName: 'Vikram Singh',
+            otp: otp,
+            startTime: new Date().toLocaleTimeString()
+        };
+        document.getElementById('activeDest').innerText = destValue;
+        document.getElementById('rideOtp').innerText = otp;
+        document.getElementById('activeRideCard').style.display = 'block';
+        document.getElementById('driverETA').innerHTML = 'Arriving in 2 min 🚗';
+        // auto complete ride after 12 seconds (demo)
+        if(window.rideCompleteTimer) clearTimeout(window.rideCompleteTimer);
+        window.rideCompleteTimer = setTimeout(() => completeActiveRide(), 12000);
+    }
+
+    function completeActiveRide() {
+        if(!activeRide) return;
+        // Add to history
+        let completed = {
+            date: new Date().toLocaleString(),
+            from: "Your GPS Location",
+            to: activeRide.destination,
+            fare: activeRide.fare,
+            type: activeRide.type,
+            status: "Completed"
+        };
+        rideHistory.unshift(completed);
+        updateHistoryUI();
+        // Deduct fare from wallet (ensuring balance)
+        if(currentUser.wallet >= activeRide.fare) currentUser.wallet -= activeRide.fare;
+        else currentUser.wallet = 0;
+        updateWalletDisplay();
+        alert(`Ride completed! ₹${activeRide.fare} deducted from wallet. Thank you!`);
+        activeRide = null;
+        document.getElementById('activeRideCard').style.display = 'none';
+        if(window.rideCompleteTimer) clearTimeout(window.rideCompleteTimer);
+    }
+
+    function cancelActiveRideFunc() {
+        if(activeRide) {
+            activeRide = null;
+            document.getElementById('activeRideCard').style.display = 'none';
+            if(window.rideCompleteTimer) clearTimeout(window.rideCompleteTimer);
+            alert("Ride cancelled successfully.");
+        } else alert("No active ride.");
+    }
+
+    function applyRideTypeSelection() {
+        document.querySelectorAll('.ride-option-card').forEach(card => {
+            card.classList.remove('active-ride');
+            card.addEventListener('click', (e) => {
+                let rideVal = card.getAttribute('data-ride');
+                selectedRideType = rideVal;
+                document.querySelectorAll('.ride-option-card').forEach(c => c.classList.remove('active-ride'));
+                card.classList.add('active-ride');
+                let fare = calcFare(routeDistanceKm, selectedRideType);
+                document.getElementById('dynamicFare').innerHTML = `₹${fare}`;
+            });
+        });
+    }
+
+    function logoutSystem() {
+        activeRide = null;
+        if(window.rideCompleteTimer) clearTimeout(window.rideCompleteTimer);
+        showPage('authPage');
+        document.getElementById('activeRideCard').style.display = 'none';
+        // Reset dummy fields
+    }
+    
+    function loginSystem() {
+        let email = document.getElementById('authEmail').value;
+        if(email.trim() === "") email = "Guest";
+        currentUser.email = email;
+        currentUser.name = email.split('@')[0];
+        document.getElementById('profileUserName').innerHTML = currentUser.name;
+        showPage('homePage');
+        if(!mapObject) initMapSystem();
+        else { mapObject.invalidateSize(); updateRoutePreview(); }
+        updateWalletDisplay();
+        updateHistoryUI();
+        // reset active ride card
+        if(document.getElementById('activeRideCard')) document.getElementById('activeRideCard').style.display = 'none';
+        activeRide = null;
+    }
+
+    // add money to wallet
+    function addMoney() { currentUser.wallet += 200; updateWalletDisplay(); alert("Added ₹200 to wallet!"); }
+
+    // EVENT BINDINGS
+    document.getElementById('doLoginBtn').addEventListener('click', loginSystem);
+    document.getElementById('logoutFromHome').addEventListener('click', logoutSystem);
+    document.getElementById('logoutProfileBtn').addEventListener('click', logoutSystem);
+    document.getElementById('bookRideBtn').addEventListener('click', requestRide);
+    document.getElementById('cancelActiveRideBtn').addEventListener('click', cancelActiveRideFunc);
+    document.getElementById('addMoneyBtn')?.addEventListener('click', addMoney);
+    document.getElementById('backHomeFromTrips')?.addEventListener('click', () => showPage('homePage'));
+    document.getElementById('backHomeFromWallet')?.addEventListener('click', () => showPage('homePage'));
+    document.getElementById('backHomeFromAccount')?.addEventListener('click', () => showPage('homePage'));
+    // navigation
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            let page = btn.getAttribute('data-navpage');
+            if(page === 'home') showPage('homePage');
+            else if(page === 'trips') { showPage('tripsPage'); updateHistoryUI(); }
+            else if(page === 'wallet') { showPage('walletPage'); updateWalletDisplay(); }
+            else if(page === 'account') showPage('accountPage');
+            document.querySelectorAll('.nav-btn').forEach(n => n.classList.remove('active-nav'));
+            btn.classList.add('active-nav');
+        });
+    });
+    applyRideTypeSelection();
+    // initial fare preview load
+    setTimeout(() => { if(document.getElementById('dynamicFare')) document.getElementById('dynamicFare').innerHTML = "₹89"; }, 100);
+    // GeoLocation for real GPS
+    if(navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            if(mapObject) { mapObject.setView([currentCoords.lat, currentCoords.lng], 14); updateRoutePreview(); }
+            document.getElementById('pickupLabel').innerHTML = "📍 Live GPS Position";
+        }, () => { console.log("GPS fallback"); });
+    }
+    // final auto-adjust for map on home show
+    window.addEventListener('load', () => { showPage('authPage'); });
+</script>
+</body>
+</html>
